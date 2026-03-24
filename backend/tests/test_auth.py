@@ -10,7 +10,6 @@ async def test_health_no_auth_required(client):
     assert data["status"] == "ok"
 
 
-@pytest.mark.skip(reason="games router not yet implemented")
 @pytest.mark.asyncio
 async def test_protected_route_without_key():
     from httpx import ASGITransport, AsyncClient
@@ -22,7 +21,6 @@ async def test_protected_route_without_key():
         assert resp.status_code == 403
 
 
-@pytest.mark.skip(reason="games router not yet implemented")
 @pytest.mark.asyncio
 async def test_protected_route_with_wrong_key():
     from httpx import ASGITransport, AsyncClient
