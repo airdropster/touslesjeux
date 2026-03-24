@@ -24,3 +24,6 @@ Thumbs.db
 # Project
 enrichi/
 batch_*.json
+
+# Test artifacts
+test.db
