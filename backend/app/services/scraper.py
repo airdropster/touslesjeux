@@ -68,15 +68,22 @@ def build_search_queries(categories: list[str]) -> list[str]:
 async def search_exa(query: str) -> list[dict]:
     """Semantic web search via Exa. Returns list of {url, title}."""
     exa = _get_exa()
-    try:
-        result = await asyncio.to_thread(exa.search, query, num_results=10, type="neural")
-        return [{"url": r.url, "title": r.title} for r in result.results]
-    except Exception as e:
-        error_str = str(e).lower()
-        if "401" in error_str or "unauthorized" in error_str:
-            raise RuntimeError("Exa API key is invalid") from e
-        logger.error("Exa search failed for '%s': %s", query, e)
-        return []
+    backoff_delays = [5, 15, 45]
+    for attempt in range(len(backoff_delays) + 1):
+        try:
+            result = await asyncio.to_thread(exa.search, query, num_results=10, type="neural")
+            return [{"url": r.url, "title": r.title} for r in result.results]
+        except Exception as e:
+            error_str = str(e).lower()
+            if "401" in error_str or "unauthorized" in error_str:
+                raise RuntimeError("Exa API key is invalid") from e
+            if attempt < len(backoff_delays) and ("429" in error_str or "500" in error_str or "503" in error_str):
+                delay = backoff_delays[attempt]
+                logger.warning("Exa search retry %d for '%s' after %ds: %s", attempt + 1, query, delay, e)
+                await asyncio.sleep(delay)
+                continue
+            logger.error("Exa search failed for '%s': %s", query, e)
+            return []
 
 
 # --- Page reading (Jina) ---
@@ -87,16 +94,23 @@ async def read_page_jina(url: str, max_length: int = 15000) -> str | None:
     headers: dict[str, str] = {"Accept": "text/plain"}
     if settings.jina_api_key:
         headers["Authorization"] = f"Bearer {settings.jina_api_key}"
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(jina_url, headers=headers)
-            if resp.status_code != 200:
+    backoff_delays = [2, 5, 15]
+    for attempt in range(len(backoff_delays) + 1):
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(jina_url, headers=headers)
+                if resp.status_code == 200:
+                    return resp.text[:max_length]
+                if resp.status_code == 429 and attempt < len(backoff_delays):
+                    delay = backoff_delays[attempt]
+                    logger.warning("Jina rate limited for %s, retry %d after %ds", url, attempt + 1, delay)
+                    await asyncio.sleep(delay)
+                    continue
                 logger.warning("Jina returned %d for %s", resp.status_code, url)
                 return None
-            return resp.text[:max_length]
-    except Exception as e:
-        logger.warning("Jina read failed for %s: %s", url, e)
-        return None
+        except Exception as e:
+            logger.warning("Jina read failed for %s: %s", url, e)
+            return None
 
 
 # --- Orchestration ---

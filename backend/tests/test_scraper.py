@@ -86,6 +86,17 @@ async def test_search_exa_no_key():
             await search_exa("test")
 
 
+@pytest.mark.asyncio
+async def test_search_exa_invalid_key():
+    with patch("app.services.scraper._get_exa") as mock_get:
+        mock_exa = MagicMock()
+        mock_exa.search.side_effect = ValueError("Request failed with status code 401: Unauthorized")
+        mock_get.return_value = mock_exa
+
+        with pytest.raises(RuntimeError, match="Exa API key is invalid"):
+            await search_exa("test")
+
+
 # --- read_page_jina ---
 
 @pytest.mark.asyncio
@@ -151,3 +162,41 @@ def test_scraped_game_dataclass():
     assert game.year is None
     assert game.raw_text == ""
     assert isinstance(game.scraped_at, datetime)
+
+
+# --- discover_games integration ---
+
+@pytest.mark.asyncio
+async def test_discover_games_integration():
+    mock_result = MagicMock()
+    mock_result.results = [
+        MagicMock(url="https://example.com/catan", title="Catan - Fiche jeu"),
+        MagicMock(url="https://example.com/azul", title="Azul | BGG"),
+    ]
+
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.text = "Game description text here"
+
+    with patch("app.services.scraper._get_exa") as mock_get, \
+         patch("httpx.AsyncClient") as mock_client_cls, \
+         patch("app.services.scraper.THROTTLE_SECONDS", 0):
+        mock_exa = MagicMock()
+        mock_exa.search.return_value = mock_result
+        mock_get.return_value = mock_exa
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client_cls.return_value = mock_client
+
+        from app.services.scraper import discover_games
+        games = await discover_games(["strategie"])
+
+    assert len(games) >= 2
+    titles = [g.title for g in games]
+    assert "Catan" in titles
+    assert "Azul" in titles
+    assert all(g.raw_text == "Game description text here" for g in games)
+    assert all(g.source_url for g in games)
