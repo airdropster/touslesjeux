@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TousLesJeux is a board game data enrichment web application. It collects board game information from the web (via Google Custom Search), enriches metadata using OpenAI (GPT-4o-mini) for theme, mechanics, complexity, player count, and more, then stores structured results in PostgreSQL. A React frontend provides a dashboard for browsing, editing, and managing game collections.
+TousLesJeux is a board game data enrichment web application. It collects board game information from the web (via Exa semantic search + Jina Reader), enriches metadata using OpenAI (GPT-4o-mini) for theme, mechanics, complexity, player count, and more, then stores structured results in PostgreSQL. A React frontend provides a dashboard for browsing, editing, and managing game collections.
 
 ## Stack
 
@@ -66,7 +66,7 @@ backend/
       collections.py   # Collection orchestration with SSE streaming
     services/
       collector.py     # Orchestrator: scrape -> enrich -> store pipeline
-      scraper.py       # Google CSE integration with allowlist and HTML sanitization
+      scraper.py       # Exa semantic search + Jina Reader for web scraping
       enricher.py      # OpenAI integration with prompt templates and validation
       dedup.py         # Deduplication service
   alembic/             # Database migration scripts
@@ -114,8 +114,8 @@ See `.env.example` for the full list:
 | Variable | Purpose |
 |---|---|
 | `OPENAI_API_KEY` | OpenAI API key for game enrichment |
-| `GOOGLE_CSE_API_KEY` | Google Custom Search Engine API key |
-| `GOOGLE_CSE_CX` | Google Custom Search Engine ID |
+| `EXA_API_KEY` | Exa API key for web search |
+| `JINA_API_KEY` | Jina Reader API key for page extraction |
 | `DB_USER` | PostgreSQL username |
 | `DB_PASSWORD` | PostgreSQL password |
 | `DATABASE_URL` | Full async database connection string |
