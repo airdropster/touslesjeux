@@ -36,7 +36,9 @@ async def list_games(
         query = query.where(Game.status == status)
         count_query = count_query.where(Game.status == status)
     if search:
-        pattern = f"%{search}%"
+        # Escape LIKE wildcards to prevent unintended pattern matching
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         search_filter = Game.title.ilike(pattern) | Game.designer.ilike(pattern) | Game.editeur.ilike(pattern)
         query = query.where(search_filter)
         count_query = count_query.where(search_filter)
@@ -64,8 +66,9 @@ async def list_games(
         query = query.where(Game.public.contains([public]))
         count_query = count_query.where(Game.public.contains([public]))
 
-    # Sorting
-    sort_col = getattr(Game, sort, Game.created_at)
+    # Sorting — whitelist to prevent access to internal model attributes
+    ALLOWED_SORT = {"title", "year", "designer", "complexity_score", "status", "created_at", "updated_at"}
+    sort_col = getattr(Game, sort) if sort in ALLOWED_SORT else Game.created_at
     query = query.order_by(sort_col.desc())
 
     total_result = await db.execute(count_query)

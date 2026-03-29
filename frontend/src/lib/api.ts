@@ -38,6 +38,6 @@ export const api = {
   getCollection: (id: number) => request<any>(`/api/collections/${id}`),
   cancelCollection: (id: number) => request<any>(`/api/collections/${id}/cancel`, { method: "POST" }),
 
-  // SSE URL (not a fetch call)
-  getStreamUrl: (id: number) => `${API_BASE}/api/collections/${id}/stream`,
+  // SSE URL (not a fetch call — pass API key via query param since EventSource can't send headers)
+  getStreamUrl: (id: number) => `${API_BASE}/api/collections/${id}/stream?api_key=${encodeURIComponent(API_KEY)}`,
 };

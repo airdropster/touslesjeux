@@ -171,6 +171,13 @@ async def run_collection(job_id: int) -> None:
             await db.commit()
             _publish_sse(job_id, SSEEvent.completed(job.processed_count, job.skipped_count, job.failed_count))
 
+        except asyncio.CancelledError:
+            logger.info("Job %d cancelled", job_id)
+            job.status = "cancelled"
+            job.completed_at = datetime.now()
+            await db.commit()
+            _publish_sse(job_id, SSEEvent.completed(job.processed_count, job.skipped_count, job.failed_count))
+            raise
         except Exception as e:
             logger.exception("Job %d failed: %s", job_id, e)
             job.status = "failed"
