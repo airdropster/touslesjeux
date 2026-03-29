@@ -4,8 +4,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://touslesjeux:changeme@localhost:5432/touslesjeux"
     openai_api_key: str = ""
-    google_cse_api_key: str = ""
-    google_cse_cx: str = ""
+    exa_api_key: str = ""
+    jina_api_key: str = ""
     app_api_key: str = "changeme"
     cors_origins: str = "http://localhost:5173"
 
