@@ -88,12 +88,36 @@ async def debug_openai():
 
 @router.get("/debug/enrich")
 async def debug_enrich():
-    """Test enrichment pipeline for a known game."""
-    from app.services.enricher import enrich_game
+    """Test enrichment pipeline for a known game with detailed error capture."""
+    import json as _json
+    from openai import AsyncOpenAI
+    from app.config import settings
+    from app.services.enricher import build_user_prompt, sanitize_enrichment, SYSTEM_PROMPT
+    from app.schemas import GameEnrichment
+
+    if not settings.openai_api_key:
+        return {"status": "error", "error": "No OpenAI API key configured"}
+
     try:
-        result = await enrich_game("Catan", None, "Catan is a popular board game about trading and building.")
-        if result:
-            return {"status": "ok", "title": result.title, "summary": result.summary[:200]}
-        return {"status": "failed", "error": "enrich_game returned None"}
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        user_prompt = build_user_prompt("Catan", None, "Catan is a popular board game about trading and building.")
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.1,
+            max_tokens=4000,
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content
+        raw_data = _json.loads(content)
+        sanitized = sanitize_enrichment(raw_data)
+        try:
+            enrichment = GameEnrichment(**sanitized)
+            return {"status": "ok", "title": enrichment.title, "summary": enrichment.summary[:200]}
+        except Exception as val_err:
+            return {"status": "validation_error", "error": str(val_err)[:500], "raw_keys": list(raw_data.keys())}
     except Exception as e:
-        return {"status": "error", "error": f"{type(e).__name__}: {e}"}
+        return {"status": "error", "error": f"{type(e).__name__}: {str(e)[:500]}"}
