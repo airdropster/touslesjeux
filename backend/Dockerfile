@@ -4,6 +4,8 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ .
+ARG VITE_API_KEY=changeme
+ENV VITE_API_KEY=$VITE_API_KEY
 RUN npm run build
 
 # Stage 2: Install Python dependencies
