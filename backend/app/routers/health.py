@@ -67,3 +67,20 @@ async def debug_discover():
         return {"error": f"{type(e).__name__}: {e}"}
     finally:
         scraper_mod.THROTTLE_SECONDS = original
+
+
+@router.get("/debug/openai")
+async def debug_openai():
+    """Test OpenAI API connectivity."""
+    from openai import AsyncOpenAI
+    from app.config import settings
+    try:
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Say 'hello' in one word."}],
+            max_tokens=5,
+        )
+        return {"status": "ok", "response": resp.choices[0].message.content}
+    except Exception as e:
+        return {"status": "error", "error": f"{type(e).__name__}: {e}"}
