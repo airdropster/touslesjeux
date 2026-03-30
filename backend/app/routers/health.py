@@ -84,3 +84,16 @@ async def debug_openai():
         return {"status": "ok", "response": resp.choices[0].message.content}
     except Exception as e:
         return {"status": "error", "error": f"{type(e).__name__}: {e}"}
+
+
+@router.get("/debug/enrich")
+async def debug_enrich():
+    """Test enrichment pipeline for a known game."""
+    from app.services.enricher import enrich_game
+    try:
+        result = await enrich_game("Catan", None, "Catan is a popular board game about trading and building.")
+        if result:
+            return {"status": "ok", "title": result.title, "summary": result.summary[:200]}
+        return {"status": "failed", "error": "enrich_game returned None"}
+    except Exception as e:
+        return {"status": "error", "error": f"{type(e).__name__}: {e}"}
