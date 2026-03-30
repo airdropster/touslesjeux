@@ -9,6 +9,7 @@ from app.services.scraper import (
     build_search_queries,
     clean_title,
     extract_titles_from_page,
+    is_listicle_title,
     read_page_jina,
     search_exa,
 )
@@ -38,6 +39,32 @@ def test_clean_title_empty():
 
 def test_clean_title_whitespace():
     assert clean_title("  Catan  ") == "Catan"
+
+
+# --- is_listicle_title ---
+
+def test_is_listicle_title_article():
+    assert is_listicle_title("Les 100 meilleurs jeux de société de stratégie (2026)") is True
+
+
+def test_is_listicle_title_top():
+    assert is_listicle_title("Top 15 jeux de stratégie incontournables") is True
+
+
+def test_is_listicle_title_selection():
+    assert is_listicle_title("Notre sélection de jeux de société") is True
+
+
+def test_is_listicle_title_too_long():
+    assert is_listicle_title("A" * 61) is True
+
+
+def test_is_listicle_title_game_name():
+    assert is_listicle_title("Catan") is False
+
+
+def test_is_listicle_title_game_with_subtitle():
+    assert is_listicle_title("Terraforming Mars") is False
 
 
 # --- build_search_queries ---

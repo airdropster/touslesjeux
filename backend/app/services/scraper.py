@@ -51,6 +51,21 @@ def clean_title(raw: str) -> str:
     return raw.split(" - ")[0].split(" | ")[0].strip()
 
 
+_LISTICLE_PATTERNS = [
+    "meilleur", "top ", "classement", "sélection", "selection",
+    "notre avis", "comparatif", "guide d'achat", "incontournable",
+    "les plus", "jeux de société",
+]
+
+
+def is_listicle_title(title: str) -> bool:
+    """Return True if a title looks like an article/listicle, not a game name."""
+    lower = title.lower().strip()
+    if len(lower) > 60:
+        return True
+    return any(p in lower for p in _LISTICLE_PATTERNS)
+
+
 def build_search_queries(categories: list[str]) -> list[str]:
     templates = [
         "meilleurs jeux de societe {cat}",
@@ -185,12 +200,14 @@ async def discover_games(categories: list[str]) -> list[ScrapedGame]:
             # Extract individual game titles from page content
             extracted = await extract_titles_from_page(raw_text)
             if not extracted:
-                # Fallback: use search result title
+                # Fallback: use search result title (only if it looks like a game name)
                 fallback = clean_title(item.get("title", ""))
-                if fallback:
+                if fallback and not is_listicle_title(fallback):
                     extracted = [fallback]
 
             for title in extracted:
+                if is_listicle_title(title):
+                    continue
                 norm = title.lower().strip()
                 if norm in seen_titles:
                     continue
