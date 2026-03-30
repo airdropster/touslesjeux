@@ -42,17 +42,32 @@ def build_user_prompt(title: str, year: int | None, scraped_text: str) -> str:
 
 
 def sanitize_enrichment(data: dict) -> dict:
+    # Fix common key variants from OpenAI
+    key_aliases = {
+        "rules_detaillees": "regles_detaillees",
+        "rules_détaillées": "regles_detaillees",
+        "règles_détaillées": "regles_detaillees",
+    }
     sanitized = {}
     for key, value in data.items():
+        actual_key = key_aliases.get(key, key)
         if isinstance(value, str):
-            sanitized[key] = bleach.clean(value, tags=[], strip=True)
+            sanitized[actual_key] = bleach.clean(value, tags=[], strip=True)
         elif isinstance(value, list):
-            sanitized[key] = [
+            sanitized[actual_key] = [
                 bleach.clean(v, tags=[], strip=True) if isinstance(v, str) else v
                 for v in value
             ]
         else:
-            sanitized[key] = value
+            sanitized[actual_key] = value
+
+    # Fix year: OpenAI sometimes returns "inconnue" or other strings instead of null
+    if "year" in sanitized and isinstance(sanitized["year"], str):
+        try:
+            sanitized["year"] = int(sanitized["year"])
+        except (ValueError, TypeError):
+            sanitized["year"] = None
+
     return sanitized
 
 
