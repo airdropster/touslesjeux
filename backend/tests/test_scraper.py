@@ -8,6 +8,7 @@ from app.services.scraper import (
     ScrapedGame,
     build_search_queries,
     clean_title,
+    extract_titles_from_page,
     read_page_jina,
     search_exa,
 )
@@ -154,6 +155,52 @@ async def test_read_page_jina_truncation():
     assert len(result) == 15000
 
 
+# --- extract_titles_from_page ---
+
+@pytest.mark.asyncio
+async def test_extract_titles_from_page_success():
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock(message=MagicMock(content='["Catan", "Azul", "Wingspan"]'))]
+
+    with patch("app.services.scraper.AsyncOpenAI") as mock_cls, \
+         patch("app.services.scraper.settings") as mock_settings:
+        mock_settings.openai_api_key = "test-key"
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_resp)
+        mock_cls.return_value = mock_client
+
+        titles = await extract_titles_from_page("Some text about board games")
+
+    assert titles == ["Catan", "Azul", "Wingspan"]
+
+
+@pytest.mark.asyncio
+async def test_extract_titles_from_page_empty():
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock(message=MagicMock(content="[]"))]
+
+    with patch("app.services.scraper.AsyncOpenAI") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_resp)
+        mock_cls.return_value = mock_client
+
+        titles = await extract_titles_from_page("No games here")
+
+    assert titles == []
+
+
+@pytest.mark.asyncio
+async def test_extract_titles_from_page_api_error():
+    with patch("app.services.scraper.AsyncOpenAI") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("API error"))
+        mock_cls.return_value = mock_client
+
+        titles = await extract_titles_from_page("Some text")
+
+    assert titles == []
+
+
 # --- ScrapedGame ---
 
 def test_scraped_game_dataclass():
@@ -178,9 +225,13 @@ async def test_discover_games_integration():
     mock_response.status_code = 200
     mock_response.text = "Game description text here"
 
+    async def mock_extract(raw_text):
+        return ["Catan", "Azul"]
+
     with patch("app.services.scraper._get_exa") as mock_get, \
          patch("httpx.AsyncClient") as mock_client_cls, \
-         patch("app.services.scraper.THROTTLE_SECONDS", 0):
+         patch("app.services.scraper.THROTTLE_SECONDS", 0), \
+         patch("app.services.scraper.extract_titles_from_page", side_effect=mock_extract):
         mock_exa = MagicMock()
         mock_exa.search.return_value = mock_result
         mock_get.return_value = mock_exa

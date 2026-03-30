@@ -1,11 +1,13 @@
 # backend/app/services/scraper.py
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 
 import httpx
 from exa_py import Exa
+from openai import AsyncOpenAI
 
 from app.config import settings
 
@@ -113,6 +115,44 @@ async def read_page_jina(url: str, max_length: int = 15000) -> str | None:
             return None
 
 
+# --- Title extraction (OpenAI) ---
+
+_EXTRACT_PROMPT = (
+    "Extract all board game titles mentioned in this text. "
+    "Return a JSON array of strings. Only include actual board game names, "
+    "not article titles or categories. If no board games are found, return []."
+)
+
+
+async def extract_titles_from_page(raw_text: str) -> list[str]:
+    """Extract individual board game titles from page content using OpenAI."""
+    if not settings.openai_api_key:
+        return []
+    try:
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _EXTRACT_PROMPT},
+                {"role": "user", "content": raw_text[:3000]},
+            ],
+            max_tokens=500,
+            temperature=0,
+        )
+        content = resp.choices[0].message.content or "[]"
+        # Strip markdown fences if present
+        content = content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        titles = json.loads(content)
+        if isinstance(titles, list):
+            return [t.strip() for t in titles if isinstance(t, str) and t.strip()]
+        return []
+    except Exception as e:
+        logger.warning("Title extraction failed: %s", e)
+        return []
+
+
 # --- Orchestration ---
 
 async def discover_games(categories: list[str]) -> list[ScrapedGame]:
@@ -120,6 +160,7 @@ async def discover_games(categories: list[str]) -> list[ScrapedGame]:
     queries = build_search_queries(categories)
     all_games: list[ScrapedGame] = []
     seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
 
     for query in queries:
         try:
@@ -141,14 +182,23 @@ async def discover_games(categories: list[str]) -> list[ScrapedGame]:
             if not raw_text:
                 continue
 
-            title = clean_title(item.get("title", ""))
-            if not title:
-                continue
+            # Extract individual game titles from page content
+            extracted = await extract_titles_from_page(raw_text)
+            if not extracted:
+                # Fallback: use search result title
+                fallback = clean_title(item.get("title", ""))
+                if fallback:
+                    extracted = [fallback]
 
-            all_games.append(ScrapedGame(
-                title=title,
-                source_url=url,
-                raw_text=raw_text,
-            ))
+            for title in extracted:
+                norm = title.lower().strip()
+                if norm in seen_titles:
+                    continue
+                seen_titles.add(norm)
+                all_games.append(ScrapedGame(
+                    title=title,
+                    source_url=url,
+                    raw_text=raw_text,
+                ))
 
     return all_games
