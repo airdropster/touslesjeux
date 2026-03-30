@@ -43,3 +43,27 @@ async def debug_scraper():
         "jina_snippet": jina_result[:200] if jina_result else None,
         "errors": errors,
     }
+
+
+@router.get("/debug/discover")
+async def debug_discover():
+    """Test discover_games end-to-end with minimal scope."""
+    import time
+    from app.services.scraper import discover_games, THROTTLE_SECONDS
+    import app.services.scraper as scraper_mod
+    # Temporarily reduce throttle for testing
+    original = scraper_mod.THROTTLE_SECONDS
+    scraper_mod.THROTTLE_SECONDS = 0.5
+    try:
+        start = time.time()
+        games = await discover_games(["strategie"])
+        elapsed = time.time() - start
+        return {
+            "elapsed_seconds": round(elapsed, 1),
+            "game_count": len(games),
+            "games": [{"title": g.title, "url": g.source_url} for g in games[:5]],
+        }
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+    finally:
+        scraper_mod.THROTTLE_SECONDS = original
